@@ -1,0 +1,182 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum InputType {
+  URLS
+  FEED
+  TEXT
+  KEYWORDS
+}
+
+enum SessionStatus {
+  IDEA
+  QNA
+  DRAFT
+  READY
+  PUBLISHED
+}
+
+enum IntegrationProvider {
+  GEMINI
+  OPENAI
+  ELEVENLABS
+  HEYGEN
+  TWITTER
+  LINKEDIN
+  WORDPRESS
+  OTHER
+}
+
+enum Platform {
+  ARTICLE
+  TWITTER
+  LINKEDIN
+  REEL_SCRIPT
+  YT_SCRIPT
+  PODCAST_SCRIPT
+  OTHER
+}
+
+enum ContentStatus {
+  DRAFT
+  FORMATTED
+  READY_TO_PUBLISH
+  PUBLISHED
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum VideoProvider {
+  ELEVENLABS
+  HEYGEN
+  HUGGINGFACE
+  OTHER
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  passwordHash String
+  createdAt    DateTime        @default(now())
+  sessions     ContentSession[]
+  integrations Integration[]
+}
+
+model Integration {
+  id                     String         @id @default(cuid())
+  user                   User           @relation(fields: [userId], references: [id])
+  userId                 String
+  provider               IntegrationProvider
+  credentialsEncrypted   String         // You will encrypt JSON and store as string
+  metadata               Json?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  publishJobs            PublishJob[]
+}
+
+model ContentSession {
+  id              String           @id @default(cuid())
+  user            User             @relation(fields: [userId], references: [id])
+  userId          String
+  title           String
+  inputType       InputType
+  inputPayload    Json             // URLs, keywords, raw content, etc.
+  selectedIdeaId  String?
+  selectedIdea    Idea?            @relation("SelectedIdea", fields: [selectedIdeaId], references: [id])
+  status          SessionStatus    @default(IDEA)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  ideas           Idea[]           @relation("SessionIdeas")
+  questions       Question[]
+  contentVersions ContentVersion[]
+}
+
+model Idea {
+  id          String         @id @default(cuid())
+  session     ContentSession @relation("SessionIdeas", fields: [sessionId], references: [id])
+  sessionId   String
+  title       String
+  description String
+  isSelected  Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  
+  selectedInSessions ContentSession[] @relation("SelectedIdea")
+}
+
+model Question {
+  id           String         @id @default(cuid())
+  session      ContentSession @relation(fields: [sessionId], references: [id])
+  sessionId    String
+  questionText String
+  createdAt    DateTime       @default(now())
+  answers      Answer[]
+}
+
+model Answer {
+  id         String   @id @default(cuid())
+  question   Question @relation(fields: [questionId], references: [id])
+  questionId String
+  answerText String
+  createdAt  DateTime @default(now())
+}
+
+model ContentVersion {
+  id          String        @id @default(cuid())
+  session     ContentSession @relation(fields: [sessionId], references: [id])
+  sessionId   String
+  platform    Platform
+  body        String
+  metadata    Json?
+  status      ContentStatus @default(DRAFT)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  publishJobs PublishJob[]
+  videoJobs   VideoJob[]
+}
+
+model PublishJob {
+  id            String        @id @default(cuid())
+  content       ContentVersion @relation(fields: [contentId], references: [id])
+  contentId     String
+  integration   Integration   @relation(fields: [integrationId], references: [id])
+  integrationId String
+  scheduledFor  DateTime?
+  status        JobStatus     @default(PENDING)
+  remoteId      String?
+  remoteUrl     String?
+  log           Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model VideoJob {
+  id             String         @id @default(cuid())
+  content        ContentVersion @relation(fields: [contentId], references: [id])
+  contentId      String
+  provider       VideoProvider
+  params         Json?
+  status         JobStatus      @default(PENDING)
+  remoteAssetUrl String?
+  log            Json?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
