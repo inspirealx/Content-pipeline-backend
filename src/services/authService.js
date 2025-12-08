@@ -28,7 +28,7 @@ async function register(email,password){
 async function login(email,password){
     const user = await prisma.user.findUnique({where: {email}});
     if(!user){
-        const err = new Error('Invaid email or password');
+        const err = new Error('Invalid email or password');
         err.status = 401;
         throw err;
 
@@ -43,7 +43,7 @@ async function login(email,password){
     const token = jwt.sign({
         userId: user.id,email:user.email},
         config.jwtSecret,
-        {expireIn: '7d'}
+        {expiresIn: '7d'}
     );
 
     return {
