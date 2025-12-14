@@ -1,41 +1,55 @@
 // src/services/aiService.js
-const axios = require('axios');
+const fetch = require('node-fetch');
+const config = require('../config/env');
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
-
-async function callGemini(prompt, apiKey) {
-    const response = await axios.post(`${GEMINI_API_URL}?key=${apiKey}`, {
-        contents: [{
-            parts: [{
-                text: prompt
+async function callGeminiAPI(prompt, apiKey) {
+    // Implement Gemini API call
+    // Use Google AI Studio API
+    const response = await fetch('https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=' + apiKey, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts: [{ text: prompt }]
             }]
-        }]
+        })
     });
 
-    let text = response.data.candidates[0].content.parts[0].text;
-    // Clean the output: remove Markdown code blocks if present
-    text = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    return text.trim();
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Gemini API Error: ${err}`);
+    }
+
+    const data = await response.json();
+    if (!data.candidates || data.candidates.length === 0) return '';
+
+    return data.candidates[0].content.parts[0].text;
 }
 
-async function generateContentIdeas(prompt, apiKey) {
-    const fullPrompt = `Generate 5 creative content ideas based on the following input: ${prompt}. Return them as a JSON array of objects with 'title' and 'description' fields.`;
-    const response = await callGemini(fullPrompt, apiKey);
-    // Assume response is JSON string
-    return JSON.parse(response);
+async function callOpenAIAPI(prompt, apiKey) {
+    // Implement OpenAI API call
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: 'gpt-4',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7
+        })
+    });
+
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`OpenAI API Error: ${err}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
 }
 
-async function generateQuestions(ideaContext, apiKey) {
-    const fullPrompt = `Based on this content idea: "${ideaContext}", generate 5 clarifying questions to help refine the idea. Return as a JSON array of strings.`;
-    const response = await callGemini(fullPrompt, apiKey);
-    return JSON.parse(response);
-}
-
-async function generateFinalContent(context, platforms, apiKey) {
-    const platformsStr = platforms.join(', ');
-    const fullPrompt = `Based on the following context, generate content for the specified platforms. Context: ${JSON.stringify(context)}. Platforms: ${platformsStr}. Return a JSON object where keys are platform names and values are the content bodies. Ensure the output is valid JSON.`;
-    const response = await callGemini(fullPrompt, apiKey);
-    return JSON.parse(response);
-}
-
-module.exports = { generateContentIdeas, generateQuestions, generateFinalContent };
+module.exports = { callGeminiAPI, callOpenAIAPI };
