@@ -1,9 +1,15 @@
 // src/server.js
-
+const http = require('http');
 const app = require('./app');
 const config = require('./config/env');
+const { initializeWebSocket } = require('./services/websocketService');
 
-app.listen(config.port, () => {
-    console.log(`Server runnning on the PORT ${config.port}`);
-    
+const server = http.createServer(app);
+
+// Initialize WebSocket
+initializeWebSocket(server);
+
+server.listen(config.port, () => {
+    console.log(`🚀 Server running on PORT ${config.port}`);
+    console.log(`📡 WebSocket server running`);
 });

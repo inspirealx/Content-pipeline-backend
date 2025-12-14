@@ -3,6 +3,7 @@ const fetch = require('node-fetch');
 const prisma = require('../db/prismaClient');
 const integrationsService = require('./integrationsService');
 const ApiError = require('../utils/ApiError');
+const { broadcastPublishUpdate } = require('./websocketService');
 
 async function publishToWordPress(content, credentials, metadata = {}) {
     const { siteUrl, username, appPassword } = credentials;
@@ -239,11 +240,24 @@ async function executePublish(jobId) {
         throw new ApiError('Publish job not found', 404);
     }
 
+    // Get userId for WebSocket broadcast
+    const userId = await prisma.contentVersion.findUnique({
+        where: { id: job.contentVersionId },
+        include: { session: { select: { userId: true } } }
+    }).then(v => v.session.userId);
+
     // Update status to RUNNING
-    await prisma.publishJob.update({
+    const runningJob = await prisma.publishJob.update({
         where: { id: jobId },
-        data: { status: 'RUNNING', startedAt: new Date() }
+        data: { status: 'RUNNING', startedAt: new Date() },
+        include: {
+            contentVersion: { select: { platform: true } },
+            integration: { select: { provider: true } }
+        }
     });
+
+    // Broadcast update
+    broadcastPublishUpdate(userId, runningJob);
 
     try {
         // Get decrypted credentials
@@ -275,15 +289,22 @@ async function executePublish(jobId) {
         }
 
         // Update job with success
-        await prisma.publishJob.update({
+        const successJob = await prisma.publishJob.update({
             where: { id: jobId },
             data: {
                 status: 'SUCCESS',
                 remoteId: result.remoteId,
                 remoteUrl: result.remoteUrl,
                 completedAt: new Date()
+            },
+            include: {
+                contentVersion: { select: { platform: true } },
+                integration: { select: { provider: true } }
             }
         });
+
+        // Broadcast success
+        broadcastPublishUpdate(userId, successJob);
 
         // Update content version status
         await prisma.contentVersion.update({
@@ -295,7 +316,7 @@ async function executePublish(jobId) {
 
     } catch (error) {
         // Update job with failure
-        await prisma.publishJob.update({
+        const failedJob = await prisma.publishJob.update({
             where: { id: jobId },
             data: {
                 status: 'FAILED',
@@ -305,8 +326,15 @@ async function executePublish(jobId) {
                     timestamp: new Date().toISOString()
                 },
                 completedAt: new Date()
+            },
+            include: {
+                contentVersion: { select: { platform: true } },
+                integration: { select: { provider: true } }
             }
         });
+
+        // Broadcast failure
+        broadcastPublishUpdate(userId, failedJob);
 
         throw error;
     }
