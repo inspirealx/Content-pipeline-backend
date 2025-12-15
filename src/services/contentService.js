@@ -334,6 +334,159 @@ async function deleteSessionCascade(sessionId, userId) {
     });
 }
 
+/**
+ * Regenerate content with different parameters (tone, length, style)
+ * @param {string} userId - User ID for authentication
+ * @param {string} versionId - Content version to regenerate
+ * @param {object} options - Regeneration options (action, tone, etc.)
+ * @returns {object} Updated content version
+ */
+async function regenerateContentVersion(userId, versionId, options) {
+    const prisma = require('../db/prismaClient');
+
+    // Verify version belongs to user
+    const version = await prisma.contentVersion.findUnique({
+        where: { id: versionId },
+        include: {
+            session: {
+                include: {
+                    idea: true,
+                    questions: {
+                        include: { answers: true }
+                    }
+                }
+            }
+        }
+    });
+
+    if (!version || version.session.userId !== userId) {
+        throw new ApiError('Content version not found or unauthorized', 404);
+    }
+
+    // Get AI credentials
+    let apiKey, provider;
+    const creds = await integrationsService.getDecryptedCredentials(userId, 'GEMINI');
+    if (creds) { apiKey = creds.apiKey; provider = 'GEMINI'; }
+    else {
+        const o = await integrationsService.getDecryptedCredentials(userId, 'OPENAI');
+        if (o) { apiKey = o.apiKey; provider = 'OPENAI'; }
+    }
+
+    if (!apiKey) throw new ApiError('No active AI integration found', 400);
+
+    // Build prompt based on action
+    const { action, tone, length, style } = options;
+    const currentContent = version.body;
+    const ideaTitle = version.session.idea?.title || 'Content';
+
+    let prompt;
+    if (action === 'change_tone') {
+        prompt = `Rewrite the following content with a ${tone || 'professional'} tone. Keep the same information but adjust the style:\n\n${currentContent}\n\nReturn ONLY the rewritten content.`;
+    } else if (action === 'change_length') {
+        const lengthInstruction = length === 'shorter' ? 'Make it more concise (50% shorter)' : 'Expand it with more details (50% longer)';
+        prompt = `${lengthInstruction}:\n\n${currentContent}\n\nReturn ONLY the modified content.`;
+    } else if (action === 'improve') {
+        prompt = `Improve the following content by making it more engaging, clear, and professional:\n\n${currentContent}\n\nReturn ONLY the improved content.`;
+    } else {
+        prompt = `Regenerate content about "${ideaTitle}" for ${version.platform} platform. ${style ? `Style: ${style}.` : ''}\n\nReturn ONLY the content.`;
+    }
+
+    // Call AI
+    let responseText;
+    if (provider === 'GEMINI') responseText = await aiService.callGeminiAPI(prompt, apiKey);
+    else responseText = await aiService.callOpenAIAPI(prompt, apiKey);
+
+    responseText = responseText.trim();
+
+    // Update version
+    const updated = await prisma.contentVersion.update({
+        where: { id: versionId },
+        data: { body: responseText }
+    });
+
+    return updated;
+}
+
+/**
+ * Auto-fix content guardrail violations using AI
+ * @param {string} userId - User ID for authentication
+ * @param {string} versionId - Content version with violations
+ * @param {string} violationType - Type of violation to fix
+ * @returns {object} Fixed content
+ */
+async function autoFixContentViolation(userId, versionId, violationType) {
+    const prisma = require('../db/prismaClient');
+
+    // Verify version belongs to user
+    const version = await prisma.contentVersion.findUnique({
+        where: { id: versionId },
+        include: {
+            session: true
+        }
+    });
+
+    if (!version || version.session.userId !== userId) {
+        throw new ApiError('Content version not found or unauthorized', 404);
+    }
+
+    // Get AI credentials
+    let apiKey, provider;
+    const creds = await integrationsService.getDecryptedCredentials(userId, 'GEMINI');
+    if (creds) { apiKey = creds.apiKey; provider = 'GEMINI'; }
+    else {
+        const o = await integrationsService.getDecryptedCredentials(userId, 'OPENAI');
+        if (o) { apiKey = o.apiKey; provider = 'OPENAI'; }
+    }
+
+    if (!apiKey) throw new ApiError('No active AI integration found', 400);
+
+    const currentContent = version.body;
+    const platform = version.platform;
+
+    // Build fix prompt based on violation type
+    let prompt;
+    switch (violationType) {
+        case 'length':
+            const maxLength = platform === 'TWITTER' ? 280 : platform === 'LINKEDIN' ? 3000 : 5000;
+            prompt = `The following content exceeds the ${platform} character limit of ${maxLength}. Shorten it while keeping the key message:\n\n${currentContent}\n\nReturn ONLY the shortened content.`;
+            break;
+        case 'tone':
+            prompt = `The following content has an inappropriate tone. Make it more professional and appropriate:\n\n${currentContent}\n\nReturn ONLY the fixed content.`;
+            break;
+        case 'formatting':
+            prompt = `Fix the formatting issues in the following content for ${platform}:\n\n${currentContent}\n\nReturn ONLY the properly formatted content.`;
+            break;
+        case 'hashtags':
+            if (platform === 'TWITTER') {
+                prompt = `Add 2-3 relevant hashtags to this Twitter content:\n\n${currentContent}\n\nReturn ONLY the content with hashtags.`;
+            } else {
+                prompt = `Add 3-5 relevant hashtags to this ${platform} content:\n\n${currentContent}\n\nReturn ONLY the content with hashtags.`;
+            }
+            break;
+        default:
+            prompt = `Fix any issues in the following content for ${platform}:\n\n${currentContent}\n\nReturn ONLY the fixed content.`;
+    }
+
+    // Call AI
+    let responseText;
+    if (provider === 'GEMINI') responseText = await aiService.callGeminiAPI(prompt, apiKey);
+    else responseText = await aiService.callOpenAIAPI(prompt, apiKey);
+
+    responseText = responseText.trim();
+
+    // Update version
+    await prisma.contentVersion.update({
+        where: { id: versionId },
+        data: { body: responseText }
+    });
+
+    return {
+        fixed: true,
+        newContent: responseText,
+        violationType
+    };
+}
+
 module.exports = {
     processInput,
     generateIdeasWithAI,
@@ -342,5 +495,7 @@ module.exports = {
     getSessionsByUserId,
     getSessionWithDetails,
     updateContentVersionBody,
-    deleteSessionCascade
+    deleteSessionCascade,
+    regenerateContentVersion,
+    autoFixContentViolation
 };

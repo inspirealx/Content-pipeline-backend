@@ -10,15 +10,14 @@ async function createIntegration(userId, provider, credentials, metadata) {
         throw new ApiError('Credentials are required', 400);
     }
 
-    const encryptedCredentials = encrypt(JSON.stringify(credentials));
+    const credentialsEncrypted = encrypt(JSON.stringify(credentials));
 
     const integration = await prisma.integration.create({
         data: {
             userId,
             provider,
-            encryptedCredentials,
+            credentialsEncrypted,
             metadata: metadata || {},
-            // isActive default true in schema usually
         }
     });
 
@@ -46,13 +45,10 @@ async function updateIntegration(integrationId, userId, updates) {
 
     const data = {};
     if (updates.credentials) {
-        data.encryptedCredentials = encrypt(JSON.stringify(updates.credentials));
+        data.credentialsEncrypted = encrypt(JSON.stringify(updates.credentials));
     }
     if (updates.metadata) {
         data.metadata = updates.metadata;
-    }
-    if (typeof updates.isActive !== 'undefined') {
-        data.isActive = updates.isActive;
     }
 
     const updated = await prisma.integration.update({
@@ -83,18 +79,11 @@ async function deleteIntegration(integrationId, userId) {
 function formatIntegration(integration) {
     let credentials = {};
     try {
-        credentials = JSON.parse(decrypt(integration.encryptedCredentials));
+        credentials = JSON.parse(decrypt(integration.credentialsEncrypted));
     } catch (e) {
         console.error(`Failed to decrypt credentials for integration ${integration.id}`);
         // Return masked or empty on error
     }
-
-    // Mask sensitive parts for display if needed? 
-    // Request says: "Return integration without exposing encrypted credentials"
-    // "Decrypt credentials for response" implies we show them back to user so they can edit? 
-    // Or normally we mask them. 
-    // The GET example shows: "credentials": { "apiKey": "***" }
-    // So we should mask.
 
     // Simple masking logic
     const maskedCredentials = {};
@@ -107,8 +96,7 @@ function formatIntegration(integration) {
         provider: integration.provider,
         credentials: maskedCredentials,
         metadata: integration.metadata,
-        createdAt: integration.createdAt,
-        isActive: integration.isActive
+        createdAt: integration.createdAt
     };
 }
 
@@ -120,10 +108,10 @@ function maskString(str) {
 // Internal helper to get RAW credentials for usage by other services
 async function getDecryptedCredentials(userId, provider) {
     const integration = await prisma.integration.findFirst({
-        where: { userId, provider, isActive: true }
+        where: { userId, provider }
     });
     if (!integration) return null;
-    return JSON.parse(decrypt(integration.encryptedCredentials));
+    return JSON.parse(decrypt(integration.credentialsEncrypted));
 }
 
 async function testIntegrationConnection(provider, credentials) {

@@ -266,6 +266,52 @@ async function updateSessionStatus(req, res, next) {
     }
 }
 
+async function regenerateContent(req, res, next) {
+    try {
+        const userId = req.user.userId;
+        const { versionId, action, tone, length, style } = req.body;
+
+        if (!versionId || !action) {
+            throw new ApiError('versionId and action are required', 400);
+        }
+
+        const updated = await contentService.regenerateContentVersion(userId, versionId, {
+            action,
+            tone,
+            length,
+            style
+        });
+
+        res.json({
+            id: updated.id,
+            sessionId: updated.sessionId,
+            platform: updated.platform,
+            body: updated.body,
+            status: updated.status,
+            metadata: updated.metadata
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+async function autoFixViolation(req, res, next) {
+    try {
+        const userId = req.user.userId;
+        const { versionId, violationType } = req.body;
+
+        if (!versionId || !violationType) {
+            throw new ApiError('versionId and violationType are required', 400);
+        }
+
+        const result = await contentService.autoFixContentViolation(userId, versionId, violationType);
+
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     generateIdeas,
     generateQuestions,
@@ -274,5 +320,7 @@ module.exports = {
     getSessionDetails,
     updateContentVersion,
     deleteSession,
-    updateSessionStatus
+    updateSessionStatus,
+    regenerateContent,
+    autoFixViolation
 };

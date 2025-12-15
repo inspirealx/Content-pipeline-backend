@@ -7,7 +7,9 @@ const {
     getPublishQueue,
     retryPublish,
     generateVideo,
-    getVideoQueue
+    getVideoQueue,
+    cancelPublish,
+    updateSchedule
 } = require('../controllers/publishController');
 
 router.use(authenticateToken);
@@ -16,6 +18,8 @@ router.use(authenticateToken);
 router.post('/publish', publishContent);
 router.get('/queue', getPublishQueue);
 router.post('/retry/:jobId', retryPublish);
+router.delete('/cancel/:jobId', cancelPublish);
+router.patch('/schedule/:jobId', updateSchedule);
 
 // Video generation endpoints
 router.post('/video', generateVideo);

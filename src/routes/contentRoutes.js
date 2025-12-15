@@ -10,7 +10,9 @@ const {
     getSessionDetails,
     updateContentVersion,
     deleteSession,
-    updateSessionStatus
+    updateSessionStatus,
+    regenerateContent,
+    autoFixViolation
 } = require('../controllers/contentController');
 
 router.use(authenticateToken);
@@ -26,5 +28,9 @@ router.get('/sessions/:id', getSessionDetails);
 router.patch('/versions/:id', updateContentVersion);
 router.delete('/sessions/:id', deleteSession);
 router.patch('/sessions/:id/status', updateSessionStatus);
+
+// Content modification endpoints
+router.post('/regenerate', regenerateContent);
+router.post('/auto-fix', autoFixViolation);
 
 module.exports = router;

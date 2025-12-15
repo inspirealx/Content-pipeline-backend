@@ -23,7 +23,13 @@
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^4.2.1",
     "node-fetch": "^2.7.0",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-github2": "^0.1.12",
+    "express-session": "^1.17.3",
+    "connect-sqlite3": "^0.9.13",
+    "crypto": "^1.0.1" 
   },
   "devDependencies": {
     "nodemon": "^3.1.11",

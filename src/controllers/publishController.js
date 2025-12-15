@@ -98,10 +98,47 @@ async function getVideoQueue(req, res, next) {
     }
 }
 
+async function cancelPublish(req, res, next) {
+    try {
+        const userId = req.user.userId;
+        const { jobId } = req.params;
+
+        const result = await publishService.cancelPublishJob(jobId, userId);
+
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+}
+
+async function updateSchedule(req, res, next) {
+    try {
+        const userId = req.user.userId;
+        const { jobId } = req.params;
+        const { scheduledFor } = req.body;
+
+        if (!scheduledFor) {
+            throw new ApiError('scheduledFor is required', 400);
+        }
+
+        const updated = await publishService.updatePublishSchedule(jobId, userId, scheduledFor);
+
+        res.json({
+            id: updated.id,
+            scheduledFor: updated.scheduledFor,
+            status: updated.status
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     publishContent,
     getPublishQueue,
     retryPublish,
     generateVideo,
-    getVideoQueue
+    getVideoQueue,
+    cancelPublish,
+    updateSchedule
 };

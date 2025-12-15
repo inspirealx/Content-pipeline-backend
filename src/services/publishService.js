@@ -428,6 +428,86 @@ async function retryPublishJob(jobId, userId) {
     return { id: jobId, status: 'PENDING' };
 }
 
+async function cancelPublishJob(jobId, userId) {
+    // Verify job belongs to user
+    const job = await prisma.publishJob.findUnique({
+        where: { id: jobId },
+        include: {
+            contentVersion: {
+                include: {
+                    session: true
+                }
+            }
+        }
+    });
+
+    if (!job) {
+        throw new ApiError('Publish job not found', 404);
+    }
+
+    if (job.contentVersion.session.userId !== userId) {
+        throw new ApiError('Unauthorized access to publish job', 403);
+    }
+
+    // Can only cancel PENDING or SCHEDULED jobs
+    if (job.status !== 'PENDING' && job.status !== 'SCHEDULED') {
+        throw new ApiError(`Cannot cancel job with status: ${job.status}`, 400);
+    }
+
+    // Update status to CANCELLED
+    await prisma.publishJob.update({
+        where: { id: jobId },
+        data: {
+            status: 'FAILED',
+            log: {
+                error: 'Job cancelled by user',
+                timestamp: new Date().toISOString()
+            },
+            completedAt: new Date()
+        }
+    });
+
+    return { id: jobId, status: 'CANCELLED' };
+}
+
+async function updatePublishSchedule(jobId, userId, scheduledFor) {
+    // Verify job belongs to user
+    const job = await prisma.publishJob.findUnique({
+        where: { id: jobId },
+        include: {
+            contentVersion: {
+                include: {
+                    session: true
+                }
+            }
+        }
+    });
+
+    if (!job) {
+        throw new ApiError('Publish job not found', 404);
+    }
+
+    if (job.contentVersion.session.userId !== userId) {
+        throw new ApiError('Unauthorized access to publish job', 403);
+    }
+
+    // Can only update schedule for PENDING or SCHEDULED jobs
+    if (job.status !== 'PENDING' && job.status !== 'SCHEDULED') {
+        throw new ApiError(`Cannot update schedule for job with status: ${job.status}`, 400);
+    }
+
+    // Update scheduled time
+    const updated = await prisma.publishJob.update({
+        where: { id: jobId },
+        data: {
+            scheduledFor: new Date(scheduledFor),
+            status: 'PENDING'
+        }
+    });
+
+    return updated;
+}
+
 module.exports = {
     publishToWordPress,
     publishToTwitter,
@@ -435,5 +515,7 @@ module.exports = {
     createPublishJobs,
     executePublish,
     getPublishJobs,
-    retryPublishJob
+    retryPublishJob,
+    cancelPublishJob,
+    updatePublishSchedule
 };

@@ -70,39 +70,63 @@ enum VideoProvider {
   OTHER
 }
 
+enum OAuthProvider {
+  GOOGLE
+  GITHUB
+}
+
+model OAuthAccount {
+  id            String        @id @default(cuid())
+  provider      OAuthProvider
+  providerId    String
+  providerEmail String?
+  accessToken   String?
+  refreshToken  String?
+  user          User          @relation(fields: [userId], references: [id])
+  userId        String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([provider, providerId])
+  @@unique([provider, userId])
+}
+
 model User {
   id           String          @id @default(cuid())
   email        String          @unique
   passwordHash String
+  name         String?
+  avatar       String?
   createdAt    DateTime        @default(now())
   sessions     ContentSession[]
   integrations Integration[]
+  oauthAccounts OAuthAccount[]
 }
 
 model Integration {
-  id                     String         @id @default(cuid())
-  user                   User           @relation(fields: [userId], references: [id])
-  userId                 String
-  provider               IntegrationProvider
-  credentialsEncrypted   String         // You will encrypt JSON and store as string
-  metadata               Json?
-  createdAt              DateTime       @default(now())
-  updatedAt              DateTime       @updatedAt
-  publishJobs            PublishJob[]
+  id                   String              @id @default(cuid())
+  user                 User                @relation(fields: [userId], references: [id])
+  userId               String
+  provider             IntegrationProvider
+  credentialsEncrypted String // You will encrypt JSON and store as string
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  publishJobs          PublishJob[]
 }
 
 model ContentSession {
-  id              String           @id @default(cuid())
-  user            User             @relation(fields: [userId], references: [id])
-  userId          String
-  title           String
-  inputType       InputType
-  inputPayload    Json             // URLs, keywords, raw content, etc.
-  selectedIdeaId  String?
-  selectedIdea    Idea?            @relation("SelectedIdea", fields: [selectedIdeaId], references: [id])
-  status          SessionStatus    @default(IDEA)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id             String        @id @default(cuid())
+  user           User          @relation(fields: [userId], references: [id])
+  userId         String
+  title          String
+  inputType      InputType
+  inputPayload   Json // URLs, keywords, raw content, etc.
+  selectedIdeaId String?
+  selectedIdea   Idea?         @relation("SelectedIdea", fields: [selectedIdeaId], references: [id])
+  status         SessionStatus @default(IDEA)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   ideas           Idea[]           @relation("SessionIdeas")
   questions       Question[]
@@ -117,7 +141,7 @@ model Idea {
   description String
   isSelected  Boolean        @default(false)
   createdAt   DateTime       @default(now())
-  
+
   selectedInSessions ContentSession[] @relation("SelectedIdea")
 }
 
@@ -139,33 +163,33 @@ model Answer {
 }
 
 model ContentVersion {
-  id          String        @id @default(cuid())
-  session     ContentSession @relation(fields: [sessionId], references: [id])
-  sessionId   String
-  platform    Platform
-  body        String
-  metadata    Json?
-  status      ContentStatus @default(DRAFT)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id        String         @id @default(cuid())
+  session   ContentSession @relation(fields: [sessionId], references: [id])
+  sessionId String
+  platform  Platform
+  body      String
+  metadata  Json?
+  status    ContentStatus  @default(DRAFT)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
   publishJobs PublishJob[]
   videoJobs   VideoJob[]
 }
 
 model PublishJob {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   content       ContentVersion @relation(fields: [contentId], references: [id])
   contentId     String
-  integration   Integration   @relation(fields: [integrationId], references: [id])
+  integration   Integration    @relation(fields: [integrationId], references: [id])
   integrationId String
   scheduledFor  DateTime?
-  status        JobStatus     @default(PENDING)
+  status        JobStatus      @default(PENDING)
   remoteId      String?
   remoteUrl     String?
   log           Json?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model VideoJob {
