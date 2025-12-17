@@ -4,8 +4,8 @@ const config = require('../config/env');
 
 async function callGeminiAPI(prompt, apiKey) {
     // Implement Gemini API call
-    // Use Google AI Studio API
-    const response = await fetch('https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=' + apiKey, {
+    // Use Google AI Studio API with updated model name
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'

@@ -14,6 +14,7 @@ datasource db {
 }
 
 enum InputType {
+  TOPIC
   URLS
   FEED
   TEXT
@@ -92,14 +93,16 @@ model OAuthAccount {
 }
 
 model User {
-  id           String          @id @default(cuid())
-  email        String          @unique
-  passwordHash String
-  name         String?
-  avatar       String?
-  createdAt    DateTime        @default(now())
-  sessions     ContentSession[]
-  integrations Integration[]
+  id            String           @id @default(cuid())
+  email         String           @unique
+  passwordHash  String
+  name          String?
+  avatar        String?
+  preferences   Json?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  sessions      ContentSession[]
+  integrations  Integration[]
   oauthAccounts OAuthAccount[]
 }
 
@@ -108,8 +111,9 @@ model Integration {
   user                 User                @relation(fields: [userId], references: [id])
   userId               String
   provider             IntegrationProvider
-  credentialsEncrypted String // You will encrypt JSON and store as string
+  credentialsEncrypted String              // You will encrypt JSON and store as string
   metadata             Json?
+  isActive             Boolean             @default(true)
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   publishJobs          PublishJob[]
@@ -178,18 +182,20 @@ model ContentVersion {
 }
 
 model PublishJob {
-  id            String         @id @default(cuid())
-  content       ContentVersion @relation(fields: [contentId], references: [id])
-  contentId     String
-  integration   Integration    @relation(fields: [integrationId], references: [id])
-  integrationId String
-  scheduledFor  DateTime?
-  status        JobStatus      @default(PENDING)
-  remoteId      String?
-  remoteUrl     String?
-  log           Json?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  contentVersion  ContentVersion @relation(fields: [contentId], references: [id])
+  contentId       String
+  integration     Integration    @relation(fields: [integrationId], references: [id])
+  integrationId   String
+  scheduledFor    DateTime?
+  status          JobStatus      @default(PENDING)
+  remoteId        String?
+  remoteUrl       String?
+  log             Json?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 
 model VideoJob {

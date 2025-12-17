@@ -3,6 +3,61 @@ const prisma = require('../db/prismaClient');
 const contentService = require('../services/contentService');
 const ApiError = require('../utils/ApiError');
 
+/**
+ * Generate a meaningful session title based on input type and content
+ * @param {string} type - The input type (TOPIC, URL, KEYWORDS, FEED, TEXT)
+ * @param {string|array} input - The input content
+ * @returns {string} Generated title (max 100 chars)
+ */
+function generateSessionTitle(type, input) {
+    const maxLength = 100;
+
+    switch (type.toLowerCase()) {
+        case 'topic':
+            const topicTitle = typeof input === 'string'
+                ? input.trim()
+                : 'New Topic Session';
+            return topicTitle.substring(0, maxLength);
+
+        case 'urls':
+        case 'url':
+            try {
+                const url = typeof input === 'string' ? input : (Array.isArray(input) ? input[0] : '');
+                const urlObj = new URL(url);
+                return `Content from ${urlObj.hostname}`.substring(0, maxLength);
+            } catch {
+                return 'URL Content Session';
+            }
+
+        case 'keywords':
+            if (Array.isArray(input) && input.length > 0) {
+                const keywordStr = input.slice(0, 3).join(', ');
+                return `Keywords: ${keywordStr}`.substring(0, maxLength);
+            } else if (typeof input === 'string') {
+                return `Keywords: ${input}`.substring(0, maxLength);
+            }
+            return 'Keyword Content Session';
+
+        case 'feed':
+            try {
+                const url = typeof input === 'string' ? input : '';
+                const urlObj = new URL(url);
+                return `RSS: ${urlObj.hostname}`.substring(0, maxLength);
+            } catch {
+                return 'RSS Feed Content';
+            }
+
+        case 'text':
+            const textTitle = typeof input === 'string'
+                ? input.trim().split('\n')[0]
+                : 'Text Content';
+            return textTitle.substring(0, maxLength);
+
+        default:
+            return 'New Content Session';
+    }
+}
+
 async function generateIdeas(req, res, next) {
     try {
         const { type, input } = req.body;
@@ -15,13 +70,14 @@ async function generateIdeas(req, res, next) {
         // Process Input
         const processedData = await contentService.processInput(type, input);
 
-        // Create Session
+        // Create Session with generated title
         const session = await prisma.contentSession.create({
             data: {
                 userId,
                 inputType: type.toUpperCase(),
                 inputPayload: { input, type }, // Store raw input
                 status: 'IDEA',
+                title: generateSessionTitle(type, input),
             }
         });
 
