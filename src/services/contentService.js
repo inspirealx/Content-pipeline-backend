@@ -139,7 +139,18 @@ async function getSessionsByUserId(userId, filters = {}) {
     const where = { userId };
 
     if (filters.status) {
-        where.status = filters.status;
+        // Map frontend status values to Prisma enum values
+        const statusMap = {
+            'idea': 'IDEA',
+            'ideas': 'IDEA',
+            'qna': 'QNA',
+            'questions': 'QNA',
+            'draft': 'DRAFT',
+            'drafts': 'DRAFT',
+            'ready': 'READY',
+            'published': 'PUBLISHED'
+        };
+        where.status = statusMap[filters.status.toLowerCase()] || filters.status.toUpperCase();
     }
 
     // Platform filter requires joining through contentVersions
@@ -175,8 +186,31 @@ async function getSessionsByUserId(userId, filters = {}) {
                 }
             },
             ideas: {
-                where: { isSelected: true },
-                select: { title: true }
+                select: {
+                    id: true,
+                    title: true,
+                    description: true,
+                    isSelected: true
+                }
+            },
+            questions: {
+                include: {
+                    answers: {
+                        select: {
+                            id: true,
+                            answerText: true
+                        }
+                    }
+                }
+            },
+            contentVersions: {
+                select: {
+                    id: true,
+                    platform: true,
+                    body: true,
+                    status: true,
+                    createdAt: true
+                }
             }
         },
         orderBy: {
@@ -184,16 +218,35 @@ async function getSessionsByUserId(userId, filters = {}) {
         }
     });
 
-    // Format response to include title from selected idea or input
-    return sessions.map(session => ({
-        id: session.id,
-        title: session.ideas[0]?.title || session.inputPayload?.input || 'Untitled',
-        status: session.status,
-        inputType: session.inputType,
-        createdAt: session.createdAt,
-        updatedAt: session.updatedAt,
-        _count: session._count
-    }));
+    // Format response to include title from session field
+    return sessions.map(session => {
+        const selectedIdea = session.ideas.find(i => i.isSelected);
+
+        // Build answers object from questions/answers
+        const answers = {};
+        session.questions.forEach(q => {
+            if (q.answers && q.answers.length > 0) {
+                answers[q.id] = q.answers[0].answerText;
+            }
+        });
+
+        return {
+            id: session.id,
+            title: session.title || selectedIdea?.title || session.inputPayload?.input || 'Untitled',
+            status: session.status,
+            inputType: session.inputType,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+            _count: session._count,
+            selectedIdea: selectedIdea ? {
+                id: selectedIdea.id,
+                title: selectedIdea.title,
+                description: selectedIdea.description
+            } : null,
+            answers: answers,
+            versions: session.contentVersions // Add content versions
+        };
+    });
 }
 
 async function getSessionWithDetails(sessionId, userId) {
@@ -229,7 +282,7 @@ async function getSessionWithDetails(sessionId, userId) {
 
     return {
         id: session.id,
-        title: selectedIdea?.title || session.inputPayload?.input || 'Untitled',
+        title: session.title || selectedIdea?.title || session.ideas[0]?.title || session.inputPayload?.input || 'Untitled',
         status: session.status,
         inputType: session.inputType,
         inputPayload: session.inputPayload,

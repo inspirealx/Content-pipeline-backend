@@ -58,6 +58,36 @@ function generateSessionTitle(type, input) {
     }
 }
 
+/**
+ * Maps frontend platform names to Prisma Platform enum values
+ * @param {string} platform - Frontend platform name (lowercase)
+ * @returns {string} Prisma enum value (uppercase)
+ */
+function mapPlatformToEnum(platform) {
+    const platformMap = {
+        'article': 'ARTICLE',
+        'twitter': 'TWITTER',
+        'linkedin': 'LINKEDIN',
+        'reel': 'REEL_SCRIPT',
+        'reel_script': 'REEL_SCRIPT',
+        'youtube': 'YT_SCRIPT',
+        'yt_script': 'YT_SCRIPT',
+        'podcast': 'PODCAST_SCRIPT',
+        'podcast_script': 'PODCAST_SCRIPT',
+        'other': 'OTHER'
+    };
+
+    const enumValue = platformMap[platform?.toLowerCase()];
+
+    if (!enumValue) {
+        throw new Error(
+            `Invalid platform: ${platform}. Supported: ${Object.keys(platformMap).join(', ')}`
+        );
+    }
+
+    return enumValue;
+}
+
 async function generateIdeas(req, res, next) {
     try {
         const { type, input } = req.body;
@@ -188,7 +218,7 @@ async function generateDrafts(req, res, next) {
             }
         }
 
-        // Update Status
+        // Update Status to DRAFTS
         await prisma.contentSession.update({
             where: { id: sessionId },
             data: { status: 'DRAFT' }
@@ -198,12 +228,15 @@ async function generateDrafts(req, res, next) {
 
         const contentVersions = [];
         for (const platform of platforms) {
+            // Map platform to enum value
+            const platformEnum = mapPlatformToEnum(platform);
+
             const contentBody = await contentService.generateContentForPlatform(userId, platform, selectedIdea.title, selectedIdea.description, answerMap);
 
             const cv = await prisma.contentVersion.create({
                 data: {
                     sessionId: sessionId,
-                    platform: platform,
+                    platform: platformEnum, // Use mapped enum value
                     body: contentBody,
                     status: 'DRAFT'
                 }
