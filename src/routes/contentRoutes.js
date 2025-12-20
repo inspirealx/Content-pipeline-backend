@@ -12,7 +12,8 @@ const {
     deleteSession,
     updateSessionStatus,
     regenerateContent,
-    autoFixViolation
+    autoFixViolation,
+    getSessionDrafts
 } = require('../controllers/contentController');
 
 router.use(authenticateToken);
@@ -25,6 +26,7 @@ router.post('/drafts', generateDrafts);
 // Content management endpoints
 router.get('/sessions', getContentSessions);
 router.get('/sessions/:id', getSessionDetails);
+router.get('/sessions/:id/drafts', getSessionDrafts);
 router.patch('/versions/:id', updateContentVersion);
 router.delete('/sessions/:id', deleteSession);
 router.patch('/sessions/:id/status', updateSessionStatus);

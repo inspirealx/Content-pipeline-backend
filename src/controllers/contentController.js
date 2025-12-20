@@ -401,6 +401,37 @@ async function autoFixViolation(req, res, next) {
     }
 }
 
+async function getSessionDrafts(req, res, next) {
+    try {
+        const userId = req.user.userId;
+        const { id } = req.params;
+
+        const sessionData = await contentService.getSessionWithDetails(id, userId);
+
+        // Return just the content versions in a clean format
+        const drafts = sessionData.contentVersions.map(cv => ({
+            id: cv.id,
+            platform: cv.platform,
+            body: cv.body,
+            status: cv.status,
+            metadata: cv.metadata || {},
+            createdAt: cv.createdAt,
+            updatedAt: cv.updatedAt
+        }));
+
+        res.json({
+            drafts,
+            session: {
+                id: sessionData.session.id,
+                title: sessionData.session.title,
+                status: sessionData.session.status
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     generateIdeas,
     generateQuestions,
@@ -411,5 +442,6 @@ module.exports = {
     deleteSession,
     updateSessionStatus,
     regenerateContent,
-    autoFixViolation
+    autoFixViolation,
+    getSessionDrafts
 };

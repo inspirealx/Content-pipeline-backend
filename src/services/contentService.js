@@ -280,18 +280,34 @@ async function getSessionWithDetails(sessionId, userId) {
     // Find selected idea
     const selectedIdea = session.ideas.find(i => i.isSelected) || null;
 
+    // Build answers object
+    const answers = {};
+    session.questions.forEach(q => {
+        if (q.answers && q.answers.length > 0) {
+            answers[q.id] = q.answers[0].answerText;
+        }
+    });
+
     return {
-        id: session.id,
-        title: session.title || selectedIdea?.title || session.ideas[0]?.title || session.inputPayload?.input || 'Untitled',
-        status: session.status,
-        inputType: session.inputType,
-        inputPayload: session.inputPayload,
-        createdAt: session.createdAt,
-        updatedAt: session.updatedAt,
-        selectedIdea,
+        session: {
+            id: session.id,
+            title: session.title || selectedIdea?.title || session.ideas[0]?.title || session.inputPayload?.input || 'Untitled',
+            status: session.status,
+            inputType: session.inputType,
+            inputPayload: session.inputPayload,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+            selectedIdea: selectedIdea ? {
+                id: selectedIdea.id,
+                title: selectedIdea.title,
+                description: selectedIdea.description
+            } : null,
+            answers: answers,
+            contentVersions: session.contentVersions
+        },
+        contentVersions: session.contentVersions,
         ideas: session.ideas,
-        questions: session.questions,
-        contentVersions: session.contentVersions
+        questions: session.questions
     };
 }
 
