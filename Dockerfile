@@ -3,9 +3,10 @@
 
 FROM node:20-bookworm-slim AS base
 
-# Install OpenSSL and other dependencies
+# Install OpenSSL, curl for healthchecks, and other dependencies
 RUN apt-get update && apt-get install -y \
     openssl \
+    curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -41,7 +42,7 @@ FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=4000
+ENV PORT=3000
 
 # Create non-root user for security
 RUN groupadd --gid 1001 nodejs && \
@@ -60,11 +61,11 @@ COPY --chown=backend:nodejs . .
 # Switch to non-root user
 USER backend
 
-EXPOSE 4000
+EXPOSE 3000
 
-# Health check
+# Health check using curl (Coolify-compatible)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # Start command (runs migrations then starts server)
 CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
