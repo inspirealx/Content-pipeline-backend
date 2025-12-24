@@ -1,6 +1,7 @@
 // src/services/analyticsService.js
 const prisma = require('../db/prismaClient');
 const integrationsService = require('./integrationsService');
+const ApiError = require('../utils/ApiError');
 
 // Simple in-memory cache
 const cache = new Map();
@@ -22,15 +23,38 @@ function parseDateRange(startDate, endDate, defaultDays = 30) {
     const start = startDate ? new Date(startDate) : new Date(Date.now() - defaultDays * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
 
+    // Validate dates are valid
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        throw new ApiError(
+            'Invalid date format',
+            400,
+            'INVALID_DATE_FORMAT',
+            'Please provide valid dates.',
+            'dateRange'
+        );
+    }
+
     // Validate
     if (start > end) {
-        throw new Error('Start date must be before end date');
+        throw new ApiError(
+            'Start date must be before end date',
+            400,
+            'INVALID_DATE_RANGE',
+            'Start date cannot be after end date.',
+            'dateRange'
+        );
     }
 
     // Limit to 1 year
     const oneYear = 365 * 24 * 60 * 60 * 1000;
     if (end - start > oneYear) {
-        throw new Error('Date range cannot exceed 1 year');
+        throw new ApiError(
+            'Date range cannot exceed 1 year',
+            400,
+            'DATE_RANGE_TOO_LARGE',
+            'Please select a date range of 1 year or less.',
+            'dateRange'
+        );
     }
 
     return { start, end };
@@ -275,10 +299,20 @@ async function checkIntegrationHealth(userId) {
             if (!credentials) {
                 status = 'ERROR';
                 error = 'No credentials found';
+            } else {
+                // Test connection for platforms that support it
+                if (['GEMINI', 'OPENAI'].includes(integration.provider)) {
+                    try {
+                        await integrationsService.testIntegrationConnection(integration.provider, credentials);
+                    } catch (testError) {
+                        status = 'ERROR';
+                        error = testError.userMessage || testError.message || 'Connection test failed';
+                    }
+                }
             }
         } catch (e) {
             status = 'ERROR';
-            error = e.message;
+            error = e.userMessage || e.message || 'Failed to check integration health';
         }
 
         // If no recent successful publish in last 7 days, mark as warning

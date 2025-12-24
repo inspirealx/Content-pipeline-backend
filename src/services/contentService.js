@@ -5,21 +5,46 @@ const integrationsService = require('./integrationsService');
 const ApiError = require('../utils/ApiError');
 
 async function processInput(type, input) {
+    if (!input || input.trim() === '') {
+        throw new ApiError(
+            'Input cannot be empty',
+            400,
+            'EMPTY_INPUT',
+            'Please provide content to generate ideas from.',
+            'input'
+        );
+    }
+
     if (type === 'url') {
+        // Validate URL format
+        try {
+            new URL(input);
+        } catch (e) {
+            throw new ApiError(
+                'Invalid URL format',
+                400,
+                'INVALID_URL',
+                'Please provide a valid URL.',
+                'input'
+            );
+        }
         return await scraperService.scrapeURL(input);
     } else if (type === 'topic') {
         return { title: input, content: input, description: input };
     } else if (type === 'keywords') {
-        return { title: input, content: input, description: input }; // Or join ? "Topic: " + input
+        return { title: input, content: input, description: input };
     } else if (type === 'feed') {
         const items = await scraperService.parseRSSFeed(input);
-        // Combine items into a summary? Or return list?
-        // Prompt expects string input.
-        // Let's combine titles of first 5 items.
         const combined = items.map(i => `${i.title}: ${i.description}`).join('\n\n');
         return { title: 'RSS Feed Summary', content: combined };
     }
-    throw new ApiError('Invalid input type', 400);
+    throw new ApiError(
+        'Invalid input type',
+        400,
+        'INVALID_INPUT_TYPE',
+        'Please select a valid input type.',
+        'type'
+    );
 }
 
 async function generateIdeasWithAI(userId, inputData) {
@@ -46,7 +71,14 @@ async function generateIdeasWithAI(userId, inputData) {
     }
 
     if (!apiKey) {
-        throw new ApiError('No active AI integration found (Gemini or OpenAI). Please configure integrations.', 400);
+        throw new ApiError(
+            'No AI provider integration found',
+            400,
+            'INTEGRATION_NOT_FOUND',
+            'No content generation API connected. Please go to Settings > Integrations and connect OpenAI or another AI provider.',
+            null,
+            { requiredProviders: ['GEMINI', 'OPENAI'] }
+        );
     }
 
     const prompt = `Generate 3 unique content ideas based on: ${inputData.title} - ${inputData.content}. 
@@ -67,7 +99,14 @@ async function generateIdeasWithAI(userId, inputData) {
         return JSON.parse(responseText);
     } catch (e) {
         console.error('AI Response parse error:', responseText);
-        throw new ApiError('Failed to parse AI response', 500);
+        throw new ApiError(
+            'AI returned malformed response',
+            500,
+            'AI_RESPONSE_MALFORMED',
+            'Failed to generate ideas. Please check your input and try again.',
+            null,
+            { rawResponse: responseText.substring(0, 200) }
+        );
     }
 }
 
@@ -95,7 +134,14 @@ async function generateQuestionsWithAI(userId, ideaTitle, ideaDescription) {
     try {
         return JSON.parse(responseText);
     } catch (e) {
-        throw new ApiError('Failed to parse AI response', 500);
+        throw new ApiError(
+            'AI returned malformed response',
+            500,
+            'AI_RESPONSE_MALFORMED',
+            'AI failed to generate relevant questions.',
+            null,
+            { rawResponse: responseText.substring(0, 200) }
+        );
     }
 }
 
@@ -108,7 +154,14 @@ async function generateContentForPlatform(userId, platform, ideaTitle, ideaDescr
         if (o) { apiKey = o.apiKey; provider = 'OPENAI'; }
     }
 
-    if (!apiKey) throw new ApiError('No active AI integration found', 400);
+    if (!apiKey) throw new ApiError(
+        'No AI provider integration found',
+        400,
+        'INTEGRATION_NOT_FOUND',
+        'No content generation API connected. Please go to Settings > Integrations and connect OpenAI or another AI provider.',
+        null,
+        { requiredProviders: ['GEMINI', 'OPENAI'] }
+    );
 
     const answersText = answers.map(a => `Q: ${a.questionText || 'Unknown'}\nA: ${a.answerText}`).join('\n\n');
 
@@ -270,11 +323,23 @@ async function getSessionWithDetails(sessionId, userId) {
     });
 
     if (!session) {
-        throw new ApiError('Session not found', 404);
+        throw new ApiError(
+            'Content session not found',
+            404,
+            'SESSION_NOT_FOUND',
+            'This content session no longer exists.',
+            'sessionId'
+        );
     }
 
     if (session.userId !== userId) {
-        throw new ApiError('Unauthorized access to session', 403);
+        throw new ApiError(
+            'Unauthorized access to session',
+            403,
+            'SESSION_ACCESS_DENIED',
+            'You do not have permission to access this session.',
+            'sessionId'
+        );
     }
 
     // Find selected idea
@@ -323,11 +388,23 @@ async function updateContentVersionBody(versionId, userId, body, metadata) {
     });
 
     if (!version) {
-        throw new ApiError('Content version not found', 404);
+        throw new ApiError(
+            'Content version not found',
+            404,
+            'CONTENT_VERSION_NOT_FOUND',
+            'The requested content draft was not found.',
+            'versionId'
+        );
     }
 
     if (version.session.userId !== userId) {
-        throw new ApiError('Unauthorized access to content version', 403);
+        throw new ApiError(
+            'Unauthorized access to content version',
+            403,
+            'CONTENT_ACCESS_DENIED',
+            'You do not have permission to edit this content.',
+            'versionId'
+        );
     }
 
     // Build update data
@@ -361,11 +438,23 @@ async function deleteSessionCascade(sessionId, userId) {
     });
 
     if (!session) {
-        throw new ApiError('Session not found', 404);
+        throw new ApiError(
+            'Content session not found',
+            404,
+            'SESSION_NOT_FOUND',
+            'This content session no longer exists.',
+            'sessionId'
+        );
     }
 
     if (session.userId !== userId) {
-        throw new ApiError('Unauthorized access to session', 403);
+        throw new ApiError(
+            'Unauthorized access to session',
+            403,
+            'SESSION_ACCESS_DENIED',
+            'You do not have permission to access this session.',
+            'sessionId'
+        );
     }
 
     // Delete in transaction for atomicity
@@ -441,7 +530,14 @@ async function regenerateContentVersion(userId, versionId, options) {
         if (o) { apiKey = o.apiKey; provider = 'OPENAI'; }
     }
 
-    if (!apiKey) throw new ApiError('No active AI integration found', 400);
+    if (!apiKey) throw new ApiError(
+        'No AI provider integration found',
+        400,
+        'INTEGRATION_NOT_FOUND',
+        'No content generation API connected. Please go to Settings > Integrations and connect OpenAI or another AI provider.',
+        null,
+        { requiredProviders: ['GEMINI', 'OPENAI'] }
+    );
 
     // Build prompt based on action
     const { action, tone, length, style } = options;

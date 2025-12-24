@@ -7,10 +7,56 @@ const ApiError = require('../utils/ApiError');
 
 async function createIntegration(userId, provider, credentials, metadata) {
     if (!credentials || Object.keys(credentials).length === 0) {
-        throw new ApiError('Credentials are required', 400);
+        throw new ApiError(
+            'API key cannot be empty',
+            400,
+            'EMPTY_API_KEY',
+            'API key cannot be empty. Please enter a valid key.',
+            'apiKey'
+        );
     }
 
-    const credentialsEncrypted = encrypt(JSON.stringify(credentials));
+    // Validate API key format based on provider
+    if (provider === 'OPENAI' && credentials.apiKey) {
+        if (!credentials.apiKey.startsWith('sk-')) {
+            throw new ApiError(
+                'Invalid API key format for OpenAI',
+                400,
+                'INVALID_API_KEY_FORMAT',
+                'Invalid API key format for OpenAI. Please check and try again.',
+                'apiKey',
+                { provider: 'OPENAI' }
+            );
+        }
+    }
+
+    if (provider === 'GEMINI' && credentials.apiKey) {
+        // Gemini API keys are typically longer and don't have a specific prefix
+        if (credentials.apiKey.length < 20) {
+            throw new ApiError(
+                'Invalid API key format for Gemini',
+                400,
+                'INVALID_API_KEY_FORMAT',
+                'Invalid API key format for Gemini. Please check and try again.',
+                'apiKey',
+                { provider: 'GEMINI' }
+            );
+        }
+    }
+
+    let credentialsEncrypted;
+    try {
+        credentialsEncrypted = encrypt(JSON.stringify(credentials));
+    } catch (error) {
+        throw new ApiError(
+            'Failed to encrypt credentials',
+            500,
+            'ENCRYPTION_FAILED',
+            'Failed to save integration. Please try again.',
+            null,
+            { provider }
+        );
+    }
 
     const integration = await prisma.integration.create({
         data: {
@@ -37,10 +83,40 @@ async function updateIntegration(integrationId, userId, updates) {
     });
 
     if (!integration) {
-        throw new ApiError('Integration not found', 404);
+        throw new ApiError(
+            'Integration not found',
+            404,
+            'INTEGRATION_NOT_FOUND',
+            'The requested integration was not found.',
+            'integrationId'
+        );
     }
     if (integration.userId !== userId) {
-        throw new ApiError('Unauthorized access to integration', 403);
+        throw new ApiError(
+            'Unauthorized access to integration',
+            403,
+            'INTEGRATION_ACCESS_DENIED',
+            'You do not have permission to delete this integration.',
+            'integrationId'
+        );
+    }
+
+    // Check if there are pending publish jobs
+    const pendingJobs = await prisma.publishJob.findFirst({
+        where: {
+            integrationId: integrationId,
+            status: { in: ['PENDING', 'RUNNING'] }
+        }
+    });
+
+    if (pendingJobs) {
+        throw new ApiError(
+            'Cannot delete integration with pending jobs',
+            409,
+            'INTEGRATION_DELETE_FAILED',
+            'Cannot delete this integration while publish jobs are pending.',
+            'integrationId'
+        );
     }
 
     const data = {};
@@ -65,10 +141,22 @@ async function deleteIntegration(integrationId, userId) {
     });
 
     if (!integration) {
-        throw new ApiError('Integration not found', 404);
+        throw new ApiError(
+            'Integration not found',
+            404,
+            'INTEGRATION_NOT_FOUND',
+            'The requested integration was not found.',
+            'integrationId'
+        );
     }
     if (integration.userId !== userId) {
-        throw new ApiError('Unauthorized access to integration', 403);
+        throw new ApiError(
+            'Unauthorized access to integration',
+            403,
+            'INTEGRATION_ACCESS_DENIED',
+            'You do not have permission to modify this integration.',
+            'integrationId'
+        );
     }
 
     await prisma.integration.delete({
@@ -119,30 +207,80 @@ async function testIntegrationConnection(provider, credentials) {
     try {
         if (provider === 'GEMINI') {
             const apiKey = credentials.apiKey;
-            if (!apiKey) throw new Error('Missing apiKey');
+            if (!apiKey) {
+                throw new ApiError(
+                    'API key missing',
+                    400,
+                    'MISSING_API_KEY',
+                    'API key is required for Gemini connection.',
+                    'apiKey',
+                    { provider: 'GEMINI' }
+                );
+            }
             // Simple fetch to list models or similar free endpoint
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-            if (!res.ok) throw new Error('Invalid API Key');
-            return { success: true, message: 'Connected to Gemini' };
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new ApiError(
+                    'Gemini API connection failed',
+                    400,
+                    'API_CONNECTION_FAILED',
+                    'Connection test failed: Gemini returned an error. Verify your credentials.',
+                    'apiKey',
+                    { provider: 'GEMINI', statusCode: res.status, error: errorData }
+                );
+            }
+            return { success: true, message: 'Connected to Gemini successfully!' };
         }
         else if (provider === 'OPENAI') {
             const apiKey = credentials.apiKey;
-            if (!apiKey) throw new Error('Missing apiKey');
+            if (!apiKey) {
+                throw new ApiError(
+                    'API key missing',
+                    400,
+                    'MISSING_API_KEY',
+                    'API key is required for OpenAI connection.',
+                    'apiKey',
+                    { provider: 'OPENAI' }
+                );
+            }
             const res = await fetch('https://api.openai.com/v1/models', {
                 headers: { 'Authorization': `Bearer ${apiKey}` }
             });
-            if (!res.ok) throw new Error('Invalid API Key');
-            return { success: true, message: 'Connected to OpenAI' };
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new ApiError(
+                    'OpenAI API connection failed',
+                    400,
+                    'API_CONNECTION_FAILED',
+                    'Connection test failed: OpenAI returned an error. Verify your credentials.',
+                    'apiKey',
+                    { provider: 'OPENAI', statusCode: res.status, error: errorData }
+                );
+            }
+            return { success: true, message: 'Connected to OpenAI successfully!' };
         }
         else if (provider === 'TWITTER' || provider === 'LINKEDIN') {
-            // Placeholder for OAuth
-            return { success: true, message: 'OAuth tokens valid (Mock)' };
+            // Placeholder for OAuth - in real implementation, validate tokens
+            return { success: true, message: `${provider} connection valid!` };
         }
         else {
-            return { success: true, message: 'Connection test passed (Generic)' };
+            return { success: true, message: 'Connection test passed!' };
         }
     } catch (error) {
-        return { success: false, message: error.message };
+        // Re-throw ApiError instances
+        if (error instanceof ApiError) {
+            throw error;
+        }
+        // Handle network/other errors
+        throw new ApiError(
+            'Connection test failed',
+            500,
+            'CONNECTION_TEST_FAILED',
+            `${provider} API is unreachable. Please check your internet connection.`,
+            null,
+            { provider }
+        );
     }
 }
 

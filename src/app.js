@@ -31,10 +31,31 @@ app.use('/auth', oauthRoutes);
 app.use('/api', routes);
 
 app.use((err, req, res, next) => {
-    console.error(err);
+    // Log error with context
+    console.error(`[${new Date().toISOString()}] Error:`, {
+        message: err.message,
+        stack: err.stack,
+        url: req.url,
+        method: req.method,
+        userId: req.user?.id,
+        statusCode: err.statusCode
+    });
+
     const statusCode = err.statusCode || err.status || 500;
+
+    // If it's an ApiError, use its toJSON method
+    if (err.toJSON) {
+        return res.status(statusCode).json(err.toJSON());
+    }
+
+    // Fallback for other errors
     res.status(statusCode).json({
-        error: err.message || 'Internal Server Error'
+        success: false,
+        error: {
+            code: 'INTERNAL_ERROR',
+            message: err.message || 'Internal Server Error',
+            userMessage: 'An unexpected error occurred. Please try again.'
+        }
     });
 });
 

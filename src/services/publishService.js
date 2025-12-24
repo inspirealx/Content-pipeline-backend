@@ -182,14 +182,74 @@ async function createPublishJobs(userId, versionId, integrationIds, scheduledFor
     });
 
     if (!version) {
-        throw new ApiError('Content version not found', 404);
+        throw new ApiError(
+            'Content version not found',
+            404,
+            'CONTENT_VERSION_NOT_FOUND',
+            'The requested content draft was not found.',
+            'versionId'
+        );
     }
 
     if (version.session.userId !== userId) {
-        throw new ApiError('Unauthorized access to content version', 403);
+        throw new ApiError(
+            'Unauthorized access to content version',
+            403,
+            'CONTENT_ACCESS_DENIED',
+            'You do not have permission to publish this content.',
+            'versionId'
+        );
+    }
+
+    // Validate content is not empty
+    if (!version.body || version.body.trim() === '') {
+        throw new ApiError(
+            'Content is empty',
+            400,
+            'EMPTY_CONTENT',
+            'Your content is empty. Please add content before publishing.',
+            'versionId'
+        );
+    }
+
+    // Validate scheduled time is not in the past
+    if (scheduledFor) {
+        const scheduledDate = new Date(scheduledFor);
+        const now = new Date();
+        if (scheduledDate <= now) {
+            throw new ApiError(
+                'Cannot schedule posts in the past',
+                400,
+                'SCHEDULE_PAST_DATE',
+                'Cannot schedule posts in the past. Please select a future date.',
+                'scheduledFor'
+            );
+        }
     }
 
     const jobs = [];
+
+    // Check for maximum concurrent jobs
+    const activeJobsCount = await prisma.publishJob.count({
+        where: {
+            contentVersion: {
+                session: { userId }
+            },
+            status: { in: ['PENDING', 'RUNNING', 'SCHEDULED'] }
+        }
+    });
+
+    const maxJobs = 10; // Configurable limit
+    if (activeJobsCount + integrationIds.length > maxJobs) {
+        throw new ApiError(
+            'Too many pending publish jobs',
+            429,
+            'PUBLISH_JOB_LIMIT_EXCEEDED',
+            `You've reached the maximum number of pending publish jobs (${activeJobsCount}/${maxJobs}).`,
+            'integrationIds',
+            { currentJobs: activeJobsCount, maxJobs, requested: integrationIds.length }
+        );
+    }
 
     for (const integrationId of integrationIds) {
         // Verify integration belongs to user
@@ -198,7 +258,37 @@ async function createPublishJobs(userId, versionId, integrationIds, scheduledFor
         });
 
         if (!integration || integration.userId !== userId) {
-            throw new ApiError(`Integration ${integrationId} not found or unauthorized`, 403);
+            throw new ApiError(
+                `Integration not found or unauthorized`,
+                403,
+                'INTEGRATION_ACCESS_DENIED',
+                `Cannot publish: No ${integration?.provider || 'platform'} account connected. Please add one in Settings.`,
+                'integrationIds',
+                { integrationId, provider: integration?.provider }
+            );
+        }
+
+        // Platform-specific validations
+        if (version.platform === 'LINKEDIN' && version.body.length > 3000) {
+            throw new ApiError(
+                'Content too long for LinkedIn',
+                400,
+                'CONTENT_TOO_LONG',
+                `LinkedIn posts cannot exceed 3000 characters. Current length: ${version.body.length}`,
+                'versionId',
+                { platform: 'LINKEDIN', maxLength: 3000, currentLength: version.body.length }
+            );
+        }
+
+        if (version.platform === 'TWITTER' && version.body.length > 280) {
+            throw new ApiError(
+                'Content too long for Twitter',
+                400,
+                'CONTENT_TOO_LONG',
+                `Twitter posts cannot exceed 280 characters. Current length: ${version.body.length}`,
+                'versionId',
+                { platform: 'TWITTER', maxLength: 280, currentLength: version.body.length }
+            );
         }
 
         // Create publish job
@@ -267,7 +357,14 @@ async function executePublish(jobId) {
         );
 
         if (!credentials) {
-            throw new Error('Integration credentials not found');
+            throw new ApiError(
+                'Integration credentials not found',
+                500,
+                'INTEGRATION_CREDENTIALS_MISSING',
+                'Your integration credentials could not be retrieved. Please reconnect in Settings.',
+                null,
+                { provider: job.integration.provider }
+            );
         }
 
         let result;
@@ -285,7 +382,14 @@ async function executePublish(jobId) {
                 result = await publishToLinkedIn(content, credentials, job.metadata);
                 break;
             default:
-                throw new Error(`Unsupported provider: ${job.integration.provider}`);
+                throw new ApiError(
+                    `Unsupported publishing platform: ${job.integration.provider}`,
+                    400,
+                    'UNSUPPORTED_PROVIDER',
+                    `Publishing to ${job.integration.provider} is not currently supported.`,
+                    null,
+                    { provider: job.integration.provider }
+                );
         }
 
         // Update job with success
@@ -451,7 +555,14 @@ async function cancelPublishJob(jobId, userId) {
 
     // Can only cancel PENDING or SCHEDULED jobs
     if (job.status !== 'PENDING' && job.status !== 'SCHEDULED') {
-        throw new ApiError(`Cannot cancel job with status: ${job.status}`, 400);
+        throw new ApiError(
+            `Cannot cancel job with status: ${job.status}`,
+            400,
+            'JOB_CANNOT_CANCEL',
+            'Failed to cancel job. It may already be completed.',
+            'jobId',
+            { currentStatus: job.status }
+        );
     }
 
     // Update status to CANCELLED
@@ -493,7 +604,14 @@ async function updatePublishSchedule(jobId, userId, scheduledFor) {
 
     // Can only update schedule for PENDING or SCHEDULED jobs
     if (job.status !== 'PENDING' && job.status !== 'SCHEDULED') {
-        throw new ApiError(`Cannot update schedule for job with status: ${job.status}`, 400);
+        throw new ApiError(
+            `Cannot update schedule for job with status: ${job.status}`,
+            400,
+            'JOB_CANNOT_RESCHEDULE',
+            'Cannot reschedule a job that is already running or completed.',
+            'jobId',
+            { currentStatus: job.status }
+        );
     }
 
     // Update scheduled time
