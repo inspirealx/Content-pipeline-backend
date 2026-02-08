@@ -57,11 +57,22 @@ async function deleteIntegration(req, res, next) {
 
 async function testConnection(req, res, next) {
     try {
-        // Can test provided credentials OR existing integration
-        // The request body shows: { provider, credentials } for ad-hoc test?
-        // Or if ID provided, use that.
-        // The prompt implies ad-hoc test validation before save: "Validate API credentials"
-        const { provider, credentials } = req.body;
+        const userId = req.user.userId;
+        let { provider, credentials, integrationId } = req.body;
+
+        // If integrationId is provided, fetch stored credentials
+        if (integrationId) {
+            const integration = await integrationsService.getIntegrationsByUserId(userId);
+            const existingIntegration = integration.find(i => i.id === integrationId);
+
+            if (!existingIntegration) {
+                throw new ApiError('Integration not found', 404);
+            }
+
+            provider = existingIntegration.provider;
+            // Get decrypted credentials for testing
+            credentials = await integrationsService.getDecryptedCredentials(userId, provider);
+        }
 
         if (!provider || !credentials) {
             throw new ApiError('Provider and credentials required for testing', 400);

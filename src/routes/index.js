@@ -5,12 +5,14 @@ const router = express.Router();
 const authRoutes = require('./authRoutes');
 const contentRoutes = require('./contentRoutes');
 const integrationsRoutes = require('./integrationsRoutes');
+const integrationRequestRoutes = require('./integrationRequestRoutes');
 const publishRoutes = require('./publishRoutes');
 const analyticsRoutes = require('./analyticsRoutes');
 const userRoutes = require('./userRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/integrations', integrationsRoutes);
+router.use('/integration-requests', integrationRequestRoutes);
 router.use('/content', contentRoutes);
 router.use('/publish', publishRoutes);
 router.use('/analytics', analyticsRoutes);

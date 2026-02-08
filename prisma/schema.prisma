@@ -23,11 +23,15 @@ enum InputType {
 }
 
 enum SessionStatus {
-  IDEA
+  ANALYZING
+  BRIEF_READY
   QNA
-  DRAFT
+  GENERATING
   READY
   PUBLISHED
+  FAILED
+  IDEA
+  DRAFT
 }
 
 enum IntegrationProvider {
@@ -99,6 +103,8 @@ model User {
   passwordHash  String
   name          String?
   avatar        String?
+  niche         String?
+  nicheDetails  Json?
   preferences   Json?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
@@ -130,11 +136,13 @@ model ContentSession {
   selectedIdeaId String?
   selectedIdea   Idea?         @relation("SelectedIdea", fields: [selectedIdeaId], references: [id])
   status         SessionStatus @default(IDEA)
+  metadata       Json?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
   ideas           Idea[]           @relation("SessionIdeas")
   questions       Question[]
+  answers         Answer[]
   contentVersions ContentVersion[]
 }
 
@@ -155,16 +163,25 @@ model Question {
   session      ContentSession @relation(fields: [sessionId], references: [id])
   sessionId    String
   questionText String
+  category     String?
+  metadata     Json?
   createdAt    DateTime       @default(now())
   answers      Answer[]
+
+  @@index([sessionId])
 }
 
 model Answer {
-  id         String   @id @default(cuid())
-  question   Question @relation(fields: [questionId], references: [id])
+  id         String          @id @default(cuid())
+  session    ContentSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId  String?
+  question   Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
   questionId String
   answerText String
-  createdAt  DateTime @default(now())
+  createdAt  DateTime        @default(now())
+
+  @@index([sessionId])
+  @@index([questionId])
 }
 
 model ContentVersion {

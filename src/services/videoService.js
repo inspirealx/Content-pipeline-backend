@@ -32,12 +32,28 @@ async function generateWithElevenLabs(script, voiceId, apiKey) {
     }
 
     // In production, save the audio buffer to cloud storage (S3, etc.)
-    // For now, we'll return a placeholder URL
-    // const audioBuffer = await response.buffer();
-    // const assetUrl = await uploadToStorage(audioBuffer);
+    // For now, we'll save to local filesystem
+    const audioBuffer = await response.buffer();
+
+    // Save to public/generated-audio directory
+    const fs = require('fs');
+    const path = require('path');
+
+    const audioDir = path.join(__dirname, '../../public/generated-audio');
+    if (!fs.existsSync(audioDir)) {
+        fs.mkdirSync(audioDir, { recursive: true });
+    }
+
+    const filename = `elevenlabs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.mp3`;
+    const filepath = path.join(audioDir, filename);
+
+    fs.writeFileSync(filepath, audioBuffer);
+
+    // Return URL accessible via static file serving
+    const assetUrl = `/generated-audio/${filename}`;
 
     return {
-        assetUrl: 'https://storage.example.com/audio/' + Date.now() + '.mp3',
+        assetUrl,
         provider: 'ELEVENLABS',
         status: 'COMPLETED'
     };

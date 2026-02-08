@@ -60,9 +60,62 @@ async function updatePreferences(req, res, next) {
     }
 }
 
+async function getUserProfileWithNiche(req, res, next) {
+    try {
+        const userId = req.user.userId;
+        const user = await userService.getUserProfile(userId);
+        // Return profile with niche information
+        res.json({
+            ...user,
+            niche: user.niche || null,
+            nicheDetails: user.nicheDetails || null
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+async function updateUserNiche(req, res, next) {
+    try {
+        const userId = req.user.userId;
+        const { niche, nicheDetails } = req.body;
+
+        // Validate niche
+        if (!niche || typeof niche !== 'string') {
+            throw new ApiError('Niche is required and must be a string', 400);
+        }
+
+        if (niche.length > 100) {
+            throw new ApiError('Niche must be 100 characters or less', 400);
+        }
+
+        // Update user with niche
+        const updatedUser = await userService.updateUserProfile(userId, {
+            niche,
+            nicheDetails: nicheDetails || null
+        });
+
+        res.json({
+            success: true,
+            message: 'Niche updated successfully',
+            user: {
+                id: updatedUser.id,
+                email: updatedUser.email,
+                name: updatedUser.name,
+                niche: updatedUser.niche,
+                nicheDetails: updatedUser.nicheDetails
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     getProfile,
     updateProfile,
     getPreferences,
-    updatePreferences
+    updatePreferences,
+    getUserProfileWithNiche,
+    updateUserNiche
 };

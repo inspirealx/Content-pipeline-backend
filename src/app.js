@@ -23,6 +23,10 @@ app.use(passport.initialize());
 app.use(cors());
 app.use(express.json());
 
+// Serve static files for generated audio
+app.use('/generated-audio', express.static('public/generated-audio'));
+
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

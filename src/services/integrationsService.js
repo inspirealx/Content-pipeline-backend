@@ -260,6 +260,35 @@ async function testIntegrationConnection(provider, credentials) {
             }
             return { success: true, message: 'Connected to OpenAI successfully!' };
         }
+        else if (provider === 'ELEVENLABS') {
+            const apiKey = credentials.apiKey;
+            if (!apiKey) {
+                throw new ApiError(
+                    'API key missing',
+                    400,
+                    'MISSING_API_KEY',
+                    'API key is required for ElevenLabs connection.',
+                    'apiKey',
+                    { provider: 'ELEVENLABS' }
+                );
+            }
+            // Test connection by fetching available voices
+            const res = await fetch('https://api.elevenlabs.io/v1/voices', {
+                headers: { 'xi-api-key': apiKey }
+            });
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new ApiError(
+                    'ElevenLabs API connection failed',
+                    400,
+                    'API_CONNECTION_FAILED',
+                    'Connection test failed: ElevenLabs returned an error. Verify your credentials.',
+                    'apiKey',
+                    { provider: 'ELEVENLABS', statusCode: res.status, error: errorData }
+                );
+            }
+            return { success: true, message: 'Connected to ElevenLabs successfully!' };
+        }
         else if (provider === 'TWITTER' || provider === 'LINKEDIN') {
             // Placeholder for OAuth - in real implementation, validate tokens
             return { success: true, message: `${provider} connection valid!` };
