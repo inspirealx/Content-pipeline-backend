@@ -5,12 +5,12 @@ module.exports = {
   google: {
     clientID: config.googleClientId,
     clientSecret: config.googleClientSecret,
-    callbackURL: `${config.baseUrl}/auth/google/callback`
+    callbackURL: `${config.baseUrl}/api/oauth/google/callback`
   },
   github: {
     clientID: config.githubClientId,
     clientSecret: config.githubClientSecret,
-    callbackURL: `${config.baseUrl}/auth/github/callback`,
+    callbackURL: `${config.baseUrl}/api/oauth/github/callback`,
     scope: ['user:email']
   }
 };

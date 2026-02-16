@@ -235,7 +235,7 @@ async function createPublishJobs(userId, versionId, integrationIds, scheduledFor
             contentVersion: {
                 session: { userId }
             },
-            status: { in: ['PENDING', 'RUNNING', 'SCHEDULED'] }
+            status: { in: ['PENDING', 'RUNNING'] }
         }
     });
 
@@ -294,7 +294,7 @@ async function createPublishJobs(userId, versionId, integrationIds, scheduledFor
         // Create publish job
         const job = await prisma.publishJob.create({
             data: {
-                contentVersionId: versionId,
+                contentId: versionId,
                 integrationId: integrationId,
                 status: 'PENDING',
                 scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
@@ -332,7 +332,7 @@ async function executePublish(jobId) {
 
     // Get userId for WebSocket broadcast
     const userId = await prisma.contentVersion.findUnique({
-        where: { id: job.contentVersionId },
+        where: { id: job.contentId },
         include: { session: { select: { userId: true } } }
     }).then(v => v.session.userId);
 
@@ -412,7 +412,7 @@ async function executePublish(jobId) {
 
         // Update content version status
         await prisma.contentVersion.update({
-            where: { id: job.contentVersionId },
+            where: { id: job.contentId },
             data: { status: 'PUBLISHED' }
         });
 

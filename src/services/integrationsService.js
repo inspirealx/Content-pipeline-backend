@@ -313,10 +313,35 @@ async function testIntegrationConnection(provider, credentials) {
     }
 }
 
+// Helper function to update integration credentials (used by OAuth)
+async function updateIntegrationCredentials(integrationId, userId, credentials, metadata) {
+    const integration = await prisma.integration.findUnique({
+        where: { id: integrationId }
+    });
+
+    if (!integration || integration.userId !== userId) {
+        throw new ApiError('Integration not found or unauthorized', 403);
+    }
+
+    const credentialsEncrypted = encrypt(JSON.stringify(credentials));
+
+    const updated = await prisma.integration.update({
+        where: { id: integrationId },
+        data: {
+            credentialsEncrypted,
+            metadata: metadata || integration.metadata,
+            updatedAt: new Date()
+        }
+    });
+
+    return formatIntegration(updated);
+}
+
 module.exports = {
     createIntegration,
     getIntegrationsByUserId,
     updateIntegration,
+    updateIntegrationCredentials,
     deleteIntegration,
     testIntegrationConnection,
     getDecryptedCredentials

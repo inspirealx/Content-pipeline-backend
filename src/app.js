@@ -10,12 +10,19 @@ const session = require('express-session');
 const passport = require('passport');
 const oauthRoutes = require('./routes/oauthRoutes');
 
+// Trust proxy is required for OAuth to work correctly behind proxies/load balancers
+// and for secure cookies to work if termination happens upstream
+app.set('trust proxy', 1);
+
 // Session middleware for OAuth
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-session-secret',
     resave: false,
-    saveUninitialized: false,
-    cookie: { secure: process.env.NODE_ENV === 'production' }
+    saveUninitialized: true, // Changed to true for better compatibility
+    cookie: {
+        secure: process.env.NODE_ENV === 'production', // Only secure in production
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
 }));
 
 app.use(passport.initialize());
@@ -31,8 +38,8 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.use('/auth', oauthRoutes);
 app.use('/api', routes);
+app.use('/api/oauth', oauthRoutes);
 
 app.use((err, req, res, next) => {
     // Log error with context
@@ -42,6 +49,8 @@ app.use((err, req, res, next) => {
         url: req.url,
         method: req.method,
         userId: req.user?.id,
+        sessionID: req.sessionID,
+        hasSession: !!req.session,
         statusCode: err.statusCode
     });
 
