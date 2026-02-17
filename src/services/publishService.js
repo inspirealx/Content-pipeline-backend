@@ -298,7 +298,6 @@ async function createPublishJobs(userId, versionId, integrationIds, scheduledFor
                 integrationId: integrationId,
                 status: 'PENDING',
                 scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-                metadata: metadata
             }
         });
 

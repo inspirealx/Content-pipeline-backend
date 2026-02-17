@@ -159,6 +159,11 @@ async function deleteIntegration(integrationId, userId) {
         );
     }
 
+    // Delete all associated publish jobs first to avoid foreign key constraints
+    await prisma.publishJob.deleteMany({
+        where: { integrationId: integrationId }
+    });
+
     await prisma.integration.delete({
         where: { id: integrationId }
     });
