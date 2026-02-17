@@ -244,12 +244,42 @@ router.get('/linkedin/connect',
   })
 );
 
+// Custom callback wrapper to handle OAuth errors gracefully (prevent JSON response in popup)
 router.get('/linkedin/callback',
-  passport.authenticate('linkedin-publishing', {
-    session: false,
-    failureRedirect: '/settings?error=oauth_failed',
-    failureFlash: false
-  }),
+  (req, res, next) => {
+    passport.authenticate('linkedin-publishing', { session: false }, (err, user, info) => {
+      if (err) {
+        console.error('\n❌ LINKEDIN OAUTH FAILURE:', err);
+        // Return HTML script to close popup and notify parent
+        return res.send(`
+          <script>
+            window.opener.postMessage({ 
+              type: 'oauth_error', 
+              provider: 'linkedin', 
+              error: '${(err.message || 'Authentication failed').replace(/'/g, "\\'")}' 
+            }, '*');
+            window.close();
+          </script>
+        `);
+      }
+
+      if (!user) {
+        return res.send(`
+          <script>
+            window.opener.postMessage({ 
+              type: 'oauth_error', 
+              provider: 'linkedin', 
+              error: 'No user data received' 
+            }, '*');
+            window.close();
+          </script>
+        `);
+      }
+
+      req.user = user;
+      next();
+    })(req, res, next);
+  },
   async (req, res) => {
     try {
       console.log('\n========== LINKEDIN CALLBACK DEBUG ==========');
@@ -295,13 +325,93 @@ router.get('/linkedin/callback',
       console.error('\n❌ LINKEDIN CALLBACK ERROR:', error);
       console.error('Error details:', {
         message: error.message,
-        stack: error.stack,
-        requestUser: req.user,
-        requestQuery: req.query,
-        sessionData: req.session
+        stack: error.stack
       });
-      console.error('============================================\n');
+      res.send(`
+        <script>
+          window.opener.postMessage({ 
+            type: 'oauth_error', 
+            provider: 'linkedin', 
+            error: '${error.message.replace(/'/g, "\\'")}' 
+          }, '*');
+          window.close();
+        </script>
+      `);
+      return;
+    }
 
+    try {
+      const { profile, tokens } = req.user;
+      const userId = req.session?.linkedinOAuthUserId;
+
+      if (!userId) {
+        throw new Error('User authentication session lost. Please try connecting LinkedIn again.');
+      }
+
+      // 1. Save Personal Profile Integration (Master)
+      console.log('💾 Saving Personal Profile integration...');
+      const masterIntegration = await integrationOauthService.saveOAuthIntegration(userId, 'LINKEDIN', profile, tokens);
+      console.log('✅ Personal Profile saved. ID:', masterIntegration.id);
+
+      // 2. Fetch Company Pages (Organizations)
+      console.log('🏢 Fetching LinkedIn Company Pages...');
+      let pages = [];
+      try {
+        const pagesResponse = await axios.get('https://api.linkedin.com/v2/organizationalEntityAcls', {
+          headers: { 'Authorization': `Bearer ${tokens.accessToken}` },
+          params: {
+            q: 'roleAssignee',
+            role: 'ADMINISTRATOR',
+            state: 'APPROVED',
+            projection: '(elements*(organizationalTarget~(name,logoV2(original~:playableStreams))))'
+          }
+        });
+
+        // Transform response into usable page objects
+        if (pagesResponse.data && pagesResponse.data.elements) {
+          pages = pagesResponse.data.elements.map(element => {
+            const org = element['organizationalTarget~'];
+            if (!org) return null;
+
+            let picture = null;
+            if (org.logoV2 && org.logoV2['original~'] && org.logoV2['original~'].elements && org.logoV2['original~'].elements.length > 0) {
+              picture = org.logoV2['original~'].elements[0].identifiers[0].identifier;
+            }
+
+            return {
+              id: element.organizationalTarget, // URN format: urn:li:organization:123456
+              name: org.name,
+              picture: picture
+            };
+          }).filter(p => p !== null);
+        }
+        console.log(`✅ Found ${pages.length} admin pages.`);
+      } catch (pageError) {
+        console.error('⚠️ Failed to fetch Company Pages:', pageError.response?.data || pageError.message);
+        // Don't fail the whole flow if pages fetch fails, just return empty list
+      }
+
+      // Clean up session
+      delete req.session.linkedinOAuthUserId;
+
+      // 3. Return Success + Pages to Frontend
+      const responseData = {
+        type: 'oauth_success',
+        provider: 'linkedin',
+        integrationId: masterIntegration.id, // Personal profile ID
+        pages: pages // List of connectable pages
+      };
+
+      res.send(`
+        <script>
+          window.opener.postMessage(${JSON.stringify(responseData)}, '*');
+          window.close();
+        </script>
+      `);
+
+    } catch (error) {
+      // ... existing error handler ...
+      console.error('\n❌ LINKEDIN CALLBACK PROCESS ERROR:', error);
       res.send(`
         <script>
           window.opener.postMessage({ 

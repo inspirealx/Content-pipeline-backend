@@ -7,7 +7,8 @@ const {
     getIntegrations,
     updateIntegration,
     deleteIntegration,
-    testConnection
+    testConnection,
+    addLinkedInPages
 } = require('../controllers/integrationsController');
 
 // All routes protected by auth
@@ -18,5 +19,6 @@ router.get('/', getIntegrations);
 router.patch('/:id', updateIntegration);
 router.delete('/:id', deleteIntegration);
 router.post('/test', testConnection);
+router.post('/linkedin/pages', addLinkedInPages);
 
 module.exports = router;

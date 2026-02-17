@@ -8,7 +8,7 @@ module.exports = {
         callbackURL: process.env.LINKEDIN_REDIRECT_URI || 'http://localhost:4000/api/oauth/linkedin/callback',
         // Force library to use OpenID Connect userinfo endpoint (v2 API)
         profileURL: 'https://api.linkedin.com/v2/userinfo',
-        scope: ['openid', 'profile', 'email', 'w_member_social'],
+        scope: ['openid', 'profile', 'email', 'w_member_social', 'w_organization_social', 'r_organization_social', 'rw_organization_admin'],
         state: true
     },
 

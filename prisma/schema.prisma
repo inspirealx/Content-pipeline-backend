@@ -111,6 +111,7 @@ model User {
   sessions      ContentSession[]
   integrations  Integration[]
   oauthAccounts OAuthAccount[]
+  reelAudios    ReelAudio[]
 }
 
 model Integration {
@@ -227,4 +228,31 @@ model VideoJob {
   log            Json?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+}
+
+model ReelAudio {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  scriptId        String?     // Link to ContentVersion or ContentSession if needed
+  scriptText      String      @db.Text
+  audioUrl        String
+  voiceId         String
+  durationSeconds Float?
+  status          JobStatus   @default(PENDING)
+  elevenLabsId    String?     // ID returned by ElevenLabs
+  createdAt       DateTime    @default(now())
+  
+  reelVideos      ReelVideo[]
+}
+
+model ReelVideo {
+  id           String    @id @default(cuid())
+  userId       String
+  audioId      String
+  reelAudio    ReelAudio @relation(fields: [audioId], references: [id])
+  templateType String
+  videoUrl     String
+  status       JobStatus @default(PENDING)
+  createdAt    DateTime  @default(now())
 }

@@ -20,12 +20,22 @@ async function saveOAuthIntegration(userId, provider, profile, tokens) {
         // Provider-specific data extraction
         switch (provider.toUpperCase()) {
             case 'LINKEDIN':
-                // Ensure correct URN format for UGC API (urn:li:person:ID)
-                credentials.personUrn = profile.id.startsWith('urn:li:person:')
-                    ? profile.id
-                    : `urn:li:person:${profile.id}`;
+                // Check if it's a person or organization URN
+                const id = profile.id;
+                const isOrg = id.startsWith('urn:li:organization:');
+
+                // Ensure correct URN format (mostly for persons if not already URN)
+                if (isOrg) {
+                    credentials.personUrn = id; // Keeping key as personUrn for compatibility, though it's an org
+                    metadata.accountType = 'PAGE';
+                } else {
+                    credentials.personUrn = id.startsWith('urn:li:person:') ? id : `urn:li:person:${id}`;
+                    metadata.accountType = 'PROFILE';
+                }
+
                 metadata.name = profile.displayName;
                 metadata.email = profile.emails?.[0]?.value;
+                metadata.picture = profile.photos?.[0]?.value;
                 break;
 
             case 'TWITTER':

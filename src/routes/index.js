@@ -9,12 +9,14 @@ const integrationRequestRoutes = require('./integrationRequestRoutes');
 const publishRoutes = require('./publishRoutes');
 const analyticsRoutes = require('./analyticsRoutes');
 const userRoutes = require('./userRoutes');
+const reelRoutes = require('./reelRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/integrations', integrationsRoutes);
 router.use('/integration-requests', integrationRequestRoutes);
 router.use('/content', contentRoutes);
 router.use('/publish', publishRoutes);
+router.use('/reels', reelRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/users', userRoutes);
 
