@@ -112,6 +112,14 @@ model User {
   integrations  Integration[]
   oauthAccounts OAuthAccount[]
   reelAudios    ReelAudio[]
+  role          UserRole         @default(USER)
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  TESTER
+  ENTERPRISE
 }
 
 model Integration {
