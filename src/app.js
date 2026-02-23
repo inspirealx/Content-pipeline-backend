@@ -38,6 +38,14 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.get('/', (req, res) => {
+    res.json({
+        name: 'Content Pipeline API',
+        status: 'running',
+        version: '1.0.0'
+    });
+});
+
 app.use('/api', routes);
 app.use('/api/oauth', oauthRoutes);
 
