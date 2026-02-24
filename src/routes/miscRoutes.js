@@ -22,7 +22,7 @@ router.post('/invite', async (req, res) => {
         `;
 
         await sendEmail({
-            to: 'harrysingh1731@gmail.com',
+            to: 'contact@mariner.news',
             subject,
             html
         });
