@@ -6,7 +6,8 @@ const config = require('../config/env');
 const ApiError = require('../utils/ApiError');
 
 async function register(data) {
-    const { email, password, fullName, companyName, companySize, industry, jobTitle, website, useCase } = data;
+    const { password, fullName, companyName, companySize, industry, jobTitle, website, useCase } = data;
+    const email = data.email.toLowerCase();
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -40,7 +41,8 @@ async function register(data) {
     return { id: user.id, email: user.email, status: 'pending' };
 }
 
-async function login(email, password) {
+async function login(emailInput, password) {
+    const email = emailInput.toLowerCase();
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
         throw new ApiError(
