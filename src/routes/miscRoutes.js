@@ -13,7 +13,7 @@ router.post('/invite', async (req, res) => {
 
         const subject = `New Enterprise Early Access Request: ${company || firstName}`;
         const html = `
-            <h2>New Early Access Request (ContentPipeline Studio)</h2>
+            <h2>New Early Access Request (Stratiara)</h2>
             <p><strong>First Name:</strong> ${firstName}</p>
             <p><strong>Last Name:</strong> ${lastName}</p>
             <p><strong>Work Email:</strong> ${email}</p>

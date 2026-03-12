@@ -40,7 +40,7 @@ app.get('/health', (req, res) => {
 
 app.get('/', (req, res) => {
     res.json({
-        name: 'Content Pipeline API',
+        name: 'Stratiara',
         status: 'running',
         version: '1.0.0'
     });
