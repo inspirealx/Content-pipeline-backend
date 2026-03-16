@@ -101,10 +101,13 @@ async function generateIdeas(req, res, next) {
         const processedData = await contentService.processInput(type, input);
 
         // Create Session with generated title
+        let prismaInputType = type.toUpperCase();
+        if (prismaInputType === 'URL') prismaInputType = 'URLS';
+
         const session = await prisma.contentSession.create({
             data: {
                 userId,
-                inputType: type.toUpperCase(),
+                inputType: prismaInputType,
                 inputPayload: { input, type }, // Store raw input
                 status: 'IDEA',
                 title: generateSessionTitle(type, input),
@@ -525,12 +528,15 @@ async function createSession(req, res, next) {
             throw new ApiError('Topic is required', 400);
         }
 
+        let prismaInputType = inputType.toUpperCase();
+        if (prismaInputType === 'URL') prismaInputType = 'URLS';
+
         // Create session with ANALYZING status
         const session = await prisma.contentSession.create({
             data: {
                 userId,
                 title: generateSessionTitle(inputType, topic),
-                inputType: inputType.toUpperCase(),
+                inputType: prismaInputType,
                 inputPayload: { topic, inputType },
                 status: 'ANALYZING'
             }
