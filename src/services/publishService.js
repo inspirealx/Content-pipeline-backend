@@ -14,9 +14,33 @@ async function publishToWordPress(content, credentials, metadata = {}) {
 
     const auth = Buffer.from(`${username}:${appPassword}`).toString('base64');
 
+    // Parse markdown to HTML and extract title if missing
+    const { marked } = require('marked');
+    let title = metadata.title;
+    let contentToParse = content;
+
+    if (!title || title === 'Untitled') {
+        // Try to extract an H1, H2, H3, H4, etc as title
+        const titleMatch = content.match(/^(?:#+)\s+(.+)$/m);
+        if (titleMatch) {
+            title = titleMatch[1].trim();
+            // Remove the matched title to avoid repetition
+            contentToParse = content.replace(titleMatch[0], '').trim();
+        } else {
+            // Fallback to first non-empty line
+            const firstLine = content.split('\n').find(line => line.trim().length > 0);
+            if (firstLine) {
+                // Strip markdown bold/italic tags for plain text title
+                title = firstLine.replace(/[*_]/g, '').trim().substring(0, 100);
+            }
+        }
+    }
+
+    const htmlContent = marked.parse(contentToParse);
+
     const body = {
-        title: metadata.title || 'Untitled',
-        content: content,
+        title: title || 'Untitled',
+        content: htmlContent,
         status: metadata.status || 'publish', // 'publish' or 'draft'
     };
 
